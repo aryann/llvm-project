@@ -9,6 +9,7 @@
 #ifndef _LIBCPP___ALGORITHM_RANGES_MIN_H
 #define _LIBCPP___ALGORITHM_RANGES_MIN_H
 
+#include <__algorithm/for_each.h>
 #include <__algorithm/min_element.h>
 #include <__assert>
 #include <__concepts/copyable.h>
@@ -66,16 +67,24 @@ struct __min {
     auto __first = ranges::begin(__r);
     auto __last  = ranges::end(__r);
     _LIBCPP_ASSERT_VALID_ELEMENT_ACCESS(__first != __last, "range must contain at least one element");
+
     if constexpr (forward_range<_Rp> && !__is_cheap_to_copy<range_value_t<_Rp>>) {
       return *std::__min_element(__first, __last, __comp, __proj);
-    } else {
-      range_value_t<_Rp> __result = *__first;
-      while (++__first != __last) {
-        if (std::invoke(__comp, std::invoke(__proj, *__first), std::invoke(__proj, __result)))
-          __result = *__first;
-      }
-      return __result;
     }
+
+    range_value_t<_Rp> __result = *__first;
+    std::__for_each(
+        std::move(__first),
+        std::move(__last),
+        [&__first, &__result, &__comp, &__proj](auto&& __elem) {
+          const auto __curr = std::__invoke(__proj, __elem);
+          const auto __min  = std::__invoke(__proj, __result);
+          if (std::__invoke(__comp, __curr, __min)) {
+            __result = __curr;
+          }
+        },
+        __proj);
+    return __result;
   }
 };
 
